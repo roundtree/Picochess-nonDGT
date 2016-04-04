@@ -2,6 +2,7 @@
 Modified version of picochess to run with reed switch chessboard controlled via Arduino nano
 
 This system communicates with the arduino over the usb port.
+It is currently set to run on  windows for ease of programming, but it works on raspberry pi by changing the com port for arduino in picoches.py.
 The arduino scans the switch matrix of the chess board and send messages to picochess based on switch changes.
 Additionaly it scans 5 buttons to simulate the buttons on a DGT clock, used by picochess for setting engine, mode time etc.
 
