@@ -83,7 +83,7 @@ class AlternativeMover:
 
 def main():
 
-    playersturn = True
+
     def engine_startup():
         if 'Hash' in engine.get().options:
             engine.option("Hash", args.hash_size)
@@ -288,7 +288,6 @@ def main():
                 last_computer_fen = game.board_fen()
                 searchmoves.add(move)
                 text = Message.COMPUTER_MOVE(result=result, fen=fen, game=game.copy(), time_control=time_control)
-                playersturn = False
                 DisplayMsg.show(text)
             else:
                 searchmoves.reset()
@@ -678,7 +677,6 @@ def main():
                     if event.inbook:
                         DisplayMsg.show(Message.BOOK_MOVE(result=event.result))
                     game = handle_move(event.result, game)
-                    playersturn = False
                     legal_fens = compute_legal_fens(game)
                     break
 
@@ -726,11 +724,8 @@ def main():
                     break
 
                 if case(EventApi.SET_TIME_CONTROL):
-                    tc = event.time_control
-                    #time_control = TimeControl(ClockMode.BLITZ, minutes_per_game=5)
-                    #TimeControl(ClockMode.BLITZ, minutes_per_game=1)
-                    #print("------BL-----event TC",Message.TIME_CONTROL(time_control_string=event.time_control_string, beep=event.beep))
-                    DisplayMsg.show(Message.TIME_CONTROL(time_text=event.time_text,time_control=event.time_control))
+                    time_control = event.time_control
+                    DisplayMsg.show(Message.TIME_CONTROL(time_text=event.time_text))
                     break
 
                 if case(EventApi.OUT_OF_TIME):
@@ -766,26 +761,26 @@ def main():
                 if case(EventApi.DGT_BUTTON):
                     DisplayMsg.show(Message.DGT_BUTTON(button=event.button))
                     break
-                if case(EventApi.Lift_Piece):
-                    from_square = int(event.square)
-                    if playersturn:
-                        print(" possible moves ")
-                        mvlist = []
-                        for move in game.legal_moves:
-                            if move.from_square == from_square:
-                                mvlist.append(move.to_square)
-                                DisplayMsg.show(Message.LIGHT_SQUARE(square = mvlist, on = True))
-                                print(move.to_square)
-                    break
-                if case(EventApi.Drop_Piece):
-                    if playersturn:
-                        playermove = chess.SQUARE_NAMES[int(from_square)]+ chess.SQUARE_NAMES[int(event.square)]
-                        move = chess.Move.from_uci(playermove)
-                        Observable.fire(Event.KEYBOARD_MOVE(move=move))
-                    DisplayMsg.show(Message.LIGHT_SQUARE(square = mvlist, on = False))
-                    DisplayMsg.show(Message.COMPUTER_MOVE_DONE_ON_BOARD())
 
-                    playersturn = True
+                if case(EventApi.Lift_Piece):
+                    mvlist=[]
+                    for move in game.legal_moves:
+                        if move.from_square == int(event.square):
+                            from_square = move.from_square
+                            mvlist.append(move.to_square)
+                    if len(mvlist):
+                        DisplayMsg.show(Message.LIGHT_SQUARE(square = mvlist, on = True))
+                    break
+
+                if case(EventApi.Drop_Piece):
+
+                    playermove = chess.SQUARE_NAMES[int(from_square)]+ chess.SQUARE_NAMES[int(event.square)]
+                    move = chess.Move.from_uci(playermove)
+                    for legalmove in game.legal_moves:
+                        if move == legalmove:
+                            Observable.fire(Event.KEYBOARD_MOVE(move=move))
+                            DisplayMsg.show(Message.LIGHT_SQUARE(square = mvlist, on = False))  #all leds off
+                            #DisplayMsg.show(Message.COMPUTER_MOVE_DONE_ON_BOARD())
 
                     break
 

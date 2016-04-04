@@ -1,6 +1,7 @@
 __author__ = 'Brian'
 
 import threading
+from picochess import *
 import pygame
 from timecontrol import *
 
@@ -72,7 +73,7 @@ class RpiDisplay(DisplayMsg,threading.Thread):
             for x in range(8):
                 piece = board.piece_at((y * 8) + x)
                 if piece:
-                   if piece.color:
+                   if not piece.color:
                        im = piece.piece_type
                    else:
                       im = piece.piece_type + 10
@@ -143,7 +144,7 @@ class RpiDisplay(DisplayMsg,threading.Thread):
                     self.level = message.level
                     self.displaybrd()
                     break
-                if case(MessageApi.TIME_CONTROL):
+                if case(MessageApi.RUN_CLOCK):
                     self.timetext = message.time_control.mode.value
                     self.displaybrd()
                     break

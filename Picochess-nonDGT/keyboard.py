@@ -140,25 +140,18 @@ class TerminalDisplay(DisplayMsg, threading.Thread):
                 if case(MessageApi.SYSTEM_INFO):
                     self.ip = ' '.join(message.info["ip"].split('.')[2:])
                     break
-                if case(MessageApi.START_NEW_GAME):
-                    # print("-----BL-----New Game ")
-                    # DgtDisplay.show(Dgt.LIGHT_CLEAR())
-                    # self.last_move = chess.Move.null()
-                    # self.reset_hint_and_score()
-                    # self.mode = Mode.GAME
-                    # self.dgt_clock_menu = Menu.GAME_MENU
-                    # self.alternative = False
-                    # #DgtDisplay.show(Dgt.DISPLAY_TEXT(text="new game", xl="newgam", beep=BeepLevel.CONFIG, duration=1))
-                    break
+
 
                 if case(MessageApi.LIGHT_SQUARE):
-                    for square in message.square:
-                        if message.on:
-                            sq = "L" + str(square)
-                        else:
-                            sq= "C" + str(square)
+                    if len(message.square)and message.on:
+                        for square in message.square:
+                            if message.on:
+                                sq = "L" + str(square)
+                                self.arduino.write(str.encode(sq))
+                    else:
+                        sq= "C" + str(square)
                         self.arduino.write(str.encode(sq))
-                        self.arduino.flush()
+                    self.arduino.flush()
                     break
                 if case():  # Default
                     pass

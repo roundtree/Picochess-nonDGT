@@ -859,9 +859,9 @@ class DgtDisplay(Observable, DisplayMsg, threading.Thread):
                             self.setup_reverse_index = self.flip_board
                             fen = fen[::-1]
                         logging.debug("DGT-Fen: " + fen)
-                        if fen == self.dgt_fen:
-                            logging.debug('Ignore same fen')
-                            break
+                        #if fen == self.dgt_fen:
+                        #    logging.debug('Ignore same fen')
+                        #    break
                         self.dgt_fen = fen
                         self.drawresign()
                         # Fire the appropriate event
@@ -955,7 +955,7 @@ class DgtDisplay(Observable, DisplayMsg, threading.Thread):
                                                           sub_version=message.sub_version, attached=message.attached))
                         break
                     if case(MessageApi.DGT_CLOCK_TIME):
-                        DisplayDgt.show(Dgt.CLOCK_TIME(time_left=message.time_left, time_right=message.time_right))
+                        #DisplayDgt.show(Dgt.CLOCK_TIME(time_left=message.time_left, time_right=message.time_right))
                         break
                     if case(MessageApi.JACK_CONNECTED_ERROR):  # this will only work in case of 2 clocks connected!
                         DisplayDgt.show(Dgt.DISPLAY_TEXT(l="error jack", m="err jack", s="jack", beep=BeepLevel.YES, duration=0))

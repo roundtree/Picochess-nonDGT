@@ -543,7 +543,7 @@ class Message():
     ENGINE_STARTUP = ClassFactory(MessageApi.ENGINE_STARTUP, ['shell', 'path', 'has_levels', 'has_960'])
     ENGINE_FAIL = ClassFactory(MessageApi.ENGINE_FAIL, [])
     LEVEL = ClassFactory(MessageApi.LEVEL, ['level', 'level_text'])
-    TIME_CONTROL = ClassFactory(MessageApi.TIME_CONTROL, ['time_text', 'time_control'])
+    TIME_CONTROL = ClassFactory(MessageApi.TIME_CONTROL, ['time_text'])
     OPENING_BOOK = ClassFactory(MessageApi.OPENING_BOOK, ['book_name', 'book_text'])
     DGT_BUTTON = ClassFactory(MessageApi.DGT_BUTTON, ['button'])
     DGT_FEN = ClassFactory(MessageApi.DGT_FEN, ['fen'])
