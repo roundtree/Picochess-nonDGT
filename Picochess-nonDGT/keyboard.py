@@ -1,5 +1,6 @@
-# Copyright (C) 2013-2014 Jean-Francois Romang (jromang@posteo.de)
+# Copyright (C) 2013-2016 Jean-Francois Romang (jromang@posteo.de)
 #                         Shivkumar Shivaji ()
+#                         Jürgen Précour (LocutusOfPenguin@posteo.de)
 #
 # This program is free software: you can redistribute it and/or modify
 # it under the terms of the GNU General Public License as published by
@@ -16,40 +17,59 @@
 
 import threading
 import chess
-import time
-import logging
 from utilities import *
-from timecontrol import *
+
+keyboard_last_fen = None
 
 
 class KeyboardInput(Observable, threading.Thread):
-    def __init__(self):
+    def __init__(self, is_pi):
         super(KeyboardInput, self).__init__()
+        self.flip_board = False
+        self.board_plugged_in = True
+        self.rt = RepeatedTimer(1, self.fire_no_board_connection)
+        self.is_pi = is_pi
+
+    def fire_no_board_connection(self):
+        s = 'Board!'
+        text = Dgt.DISPLAY_TEXT(l='no e-' + s, m='no' + s, s=s, wait=True, beep=False, maxtime=0)
+        DisplayMsg.show(Message.NO_EBOARD_ERROR(text=text, is_pi=self.is_pi))
 
     def run(self):
+        logging.info('evt_queue ready')
+        print('#' * 42 + ' PicoChess v' + version + ' ' + '#' * 42)
+        print('To play a move enter the from-to squares like "e2e4". To play this move on board, enter "go".')
+        print('When the computer displays its move, also type "go" to actually do it on the board (see above).')
+        print('Other commands are:')
+        print('newgame:<w|b>, print:<fen>, setup:<fen>, fen:<fen>, button:<0-5>, lever:<l|r>, plug:<in|off>')
+        print('')
+        print('This console mode is mainly for development. Better activate picochess together with a DGT-Board ;-)')
+        print('#' * 100)
+        print('')
         while True:
             raw = input('PicoChess v'+version+':>').strip()
+            if not raw:
+                continue
             cmd = raw.lower()
+
             try:
-                # commands like "newgame:<w|b>" or "setup:<legal_fen_string>"
-                # or "print:<legal_fen_string>"
-                #
-                # for simulating a dgt board use the following commands
-                # "fen:<legal_fen_string>" or "button:<0-4>"
-                #
-                # everything else is regarded as a move string
-                if cmd.startswith('newgame:'):
-                    side = cmd.split(':')[1]
-                    if side == 'w':
-                        self.fire(Event.DGT_FEN(fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'))
-                    elif side == 'b':
-                        self.fire(Event.DGT_FEN(fen='RNBKQBNR/PPPPPPPP/8/8/8/8/pppppppp/rnbkqbnr'))
-                    else:
-                        raise ValueError(raw)
+                if cmd.startswith('print:'):
+                    fen = raw.split(':')[1]
+                    print(chess.Board(fen))
                 else:
-                    if cmd.startswith('print:'):
-                        fen = raw.split(':')[1]
-                        print(chess.Board(fen))
+                    if not self.board_plugged_in and not cmd.startswith('plug:'):
+                        print('The command isnt accepted cause the virtual board is not plugged in')
+                        continue
+                    if cmd.startswith('newgame:'):
+                        side = cmd.split(':')[1]
+                        if side == 'w':
+                            self.flip_board = False
+                            self.fire(Event.DGT_FEN(fen='rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'))
+                        elif side == 'b':
+                            self.flip_board = True
+                            self.fire(Event.DGT_FEN(fen='RNBKQBNR/PPPPPPPP/8/8/8/8/pppppppp/rnbkqbnr'))
+                        else:
+                            raise ValueError(side)
                     elif cmd.startswith('setup:'):
                         fen = raw.split(':')[1]
                         uci960 = False  # make it easy for the moment
@@ -67,91 +87,101 @@ class KeyboardInput(Observable, threading.Thread):
                         self.fire(Event.DGT_FEN(fen=fen.split(' ')[0]))
                     elif cmd.startswith('button:'):
                         button = int(cmd.split(':')[1])
-                        if button not in range(5):
+                        if button not in range(6):
                             raise ValueError(button)
+                        if button == 5:  # make it to power button
+                            button = 0x11
                         self.fire(Event.DGT_BUTTON(button=button))
+                    elif cmd.startswith('lever:'):
+                        lever = cmd.split(':')[1]
+                        if lever not in ('l', 'r'):
+                            raise ValueError(lever)
+                        button = 0x40 if lever == 'r' else -0x40
+                        self.fire(Event.DGT_BUTTON(button=button))
+                    elif cmd.startswith('plug:'):
+                        plug = cmd.split(':')[1]
+                        if plug not in ('in', 'off'):
+                            raise ValueError(plug)
+                        if plug == 'in':
+                            self.board_plugged_in = True
+                            self.rt.stop()
+                            text_l, text_m, text_s = 'VirtBoard  ', 'V-Board ', 'VBoard'
+                            text = Dgt.DISPLAY_TEXT(l=text_l, m=text_m, s=text_s, wait=True, beep=False, maxtime=1)
+                            DisplayMsg.show(Message.EBOARD_VERSION(text=text, channel='console'))
+                        if plug == 'off':
+                            self.board_plugged_in = False
+                            self.rt.start()
+                    elif cmd.startswith('go'):
+                        if keyboard_last_fen is not None:
+                            self.fire(Event.DGT_FEN(fen=keyboard_last_fen))
+                        else:
+                            print('last move already send to virtual board')
                     # end simulation code
                     else:
                         # move => fen => virtual board sends fen
                         move = chess.Move.from_uci(cmd)
-                        self.fire(Event.KEYBOARD_MOVE(move=move))
+                        self.fire(Event.KEYBOARD_MOVE(move=move, flip_board=self.flip_board))
+
             except ValueError as e:
                 logging.warning('Invalid user input [%s]', raw)
 
 
 class TerminalDisplay(DisplayMsg, threading.Thread):
-      def __init__(self,ser):
+    def __init__(self):
         super(TerminalDisplay, self).__init__()
-        self.arduino = ser
-      def run(self):
-        global playersturn
-        while True:
-           # time.sleep(1)
 
+    def run(self):
+        global keyboard_last_fen
+        logging.info('msg_queue terminaldisplay ready')
+        while True:
             # Check if we have something to display
             message = self.msg_queue.get()
             for case in switch(message):
+                #print(message)
                 if case(MessageApi.COMPUTER_MOVE):
-
-                    #self.playermove= False
-                    #print('\n' + str(message.game))
-                    #print(message.game.fen())
-                    #print('emulate user to make the computer move...sleeping for one second')
-                    # mvlist = []
-                    # mvlist.append( message.result.bestmove.from_square)
-                    # mvlist.append( message.result.bestmove.to_square)
-                    # Display.show(Message.LIGHT_SQUARE(square = mvlist, on = 1))
-                    #
-                    # time.sleep(1) #allow time to make move
-
-                    #logging.debug('emulate user now finished doing computer move')
-                    #Display.show(Message.DGT_FEN(fen=message.game.board_fen()))
+                    print('\n' + message.fen)
+                    print(message.game)
+                    print(message.game.fen() + '\n')
+                    keyboard_last_fen = message.game.fen().split(' ')[0]
                     break
-                if case(MessageApi.SEARCH_STARTED):
-                    #if message.engine_status == EngineStatus.THINK:
-                        #print('Computer starts thinking')
-                    #if message.engine_status == EngineStatus.PONDER:
-                        #print('Computer starts pondering')
-                    #if message.engine_status == EngineStatus.WAIT:
-                        #print('Computer starts waiting - hmmm')
+                if case(MessageApi.COMPUTER_MOVE_DONE_ON_BOARD):
+                    keyboard_last_fen = None
                     break
-                if case(MessageApi.SEARCH_STOPPED):
-                    #if message.engine_status == EngineStatus.THINK:
-                        #print('Computer stops thinking')
-                    #if message.engine_status == EngineStatus.PONDER:
-                        #print('Computer stops pondering')
-                    #if message.engine_status == EngineStatus.WAIT:
-                        #print('Computer stops waiting - hmmm')
+                if case(MessageApi.USER_MOVE):
+                    print('\n' + message.fen)
+                    print(message.game)
+                    print(message.game.fen() + '\n')
+                    keyboard_last_fen = None
                     break
-                if case(MessageApi.DGT_CLOCK_TIME):     #bl
-                    #print(message.time_left,message.time_right)
-                    #DgtDisplay.show(Dgt.CLOCK_TIME(time_left=message.time_left, time_right=message.time_right))
+                if case(MessageApi.START_NEW_GAME):
+                    keyboard_last_fen = None
                     break
-                if case(MessageApi.NEW_SCORE):
-
-                    self.score = message.score
-                    self.mate = message.mate
-                    #print("-----BL-----New Score %s", self.score)
-                    #if message.mode == Mode.KIBITZ:
-                    print(str(self.score).rjust(6))
-                        #DgtDisplay.show(Dgt.DISPLAY_TEXT(text=str(self.score).rjust(6), xl=None,
-                        #                beep=BeepLevel.NO, duration=1))
+                # if case(MessageApi.SEARCH_STARTED):
+                #     if message.engine_status == EngineStatus.THINK:
+                #         print('Computer starts thinking')
+                #     if message.engine_status == EngineStatus.PONDER:
+                #         print('Computer starts pondering')
+                #     if message.engine_status == EngineStatus.WAIT:
+                #         print('Computer starts waiting - hmmm')
+                #     break
+                # if case(MessageApi.SEARCH_STOPPED):
+                #     if message.engine_status == EngineStatus.THINK:
+                #         print('Computer stops thinking')
+                #     if message.engine_status == EngineStatus.PONDER:
+                #         print('Computer stops pondering')
+                #     if message.engine_status == EngineStatus.WAIT:
+                #         print('Computer stops waiting - hmmm')
+                #     break
+                if case(MessageApi.KEYBOARD_MOVE):
+                    Observable.fire(Event.DGT_FEN(fen= message.fen))
+                    keyboard_last_fen = message.fen
                     break
-                if case(MessageApi.SYSTEM_INFO):
-                    self.ip = ' '.join(message.info["ip"].split('.')[2:])
-                    break
-
-
-                if case(MessageApi.LIGHT_SQUARE):
-                    if len(message.square)and message.on:
-                        for square in message.square:
-                            if message.on:
-                                sq = "L" + str(square)
-                                self.arduino.write(str.encode(sq))
+                if case(MessageApi.PLAYMOVE):
+                    if message.fen is not None:
+                         Observable.fire(Event.DGT_FEN(fen=keyboard_last_fen))
                     else:
-                        sq= "C" + str(square)
-                        self.arduino.write(str.encode(sq))
-                    self.arduino.flush()
+                         print('last move already send to virtual board')
                     break
+
                 if case():  # Default
                     pass

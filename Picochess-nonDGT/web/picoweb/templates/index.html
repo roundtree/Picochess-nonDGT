@@ -1,5 +1,9 @@
 {% extends 'base.html' %}
 
+{% block title %}
+PicoChess Webserver
+{% endblock %}
+
 {% block prebody %}
 
 <style>
@@ -552,7 +556,7 @@ $(function () {
                     updateDGTPosition(j);
                     break;
                 case "NewGame":
-                    newBoard();
+                    newBoard(j.fen);
                     break;
                 case "Message":
                     updateDGTPosition(j);
@@ -663,7 +667,7 @@ var onDrop = function(source, target) {
 
         // illegal move
     if (move === null) return 'snapback';
-}
+};
 
 // update the board position after the piece snap
 // for castling, en passant, pawn promotion
@@ -1023,7 +1027,7 @@ function loadGame(i, fromDGT) {
         current_position = __ret.node;
     }
     if (fromDGT){
-        fenHash[dgtFEN] = fenHash[tmp_game.fen()]
+        fenHash[dgtFEN] = fenHash[tmp_game.fen()];
         fenHash[dgtFEN].fen = dgtFEN;
         fenHash['last'] = fenHash[dgtFEN];
         curr_fen = dgtFEN;
@@ -1053,7 +1057,7 @@ function writeVariationTree(dom, gameMoves, gameHistoryEl) {
 
 
 function getGameHeader(h) {
-    var gameHeaderText = '<h4>' + h.White + ' (' + h.WhiteElo + ') - ' + h.Black + ' (' + h.BlackElo + ')</h4>';
+    var gameHeaderText = '<h4>' + h.White + ' (' + h.WhiteElo + ') vs ' + h.Black + ' (' + h.BlackElo + ')</h4>';
     gameHeaderText += '<h5>' + h.Event + ', ' + h.Site + ' ' + h.Date + '</h5>';
     return gameHeaderText;
 }
@@ -1066,8 +1070,7 @@ function writeGameText(g, dom, skip_header) {
     if (typeof(h.Result) == 'undefined') {
         h.Result = '';
     }
-    var gameHeaderText = '<h4>' + h.White + ' (' + h.WhiteElo + ') - ' + h.Black + ' (' + h.BlackElo + ')</h4>';
-    gameHeaderText += '<h5>' + h.Event + ', ' + h.Site + ' ' + h.Date + '</h5>';
+    var gameHeaderText = getGameHeader(h);
     if (skip_header) {
         gameHeaderText = '';
     }
@@ -1140,7 +1143,7 @@ function fwd() {
     updateStatus();
 }
 
-function newBoard() {
+function newBoard(fen) {
     stop_analysis();
     currentPosition = {};
     gameHistory = currentPosition;
@@ -1150,22 +1153,23 @@ function newBoard() {
 
     curr_move.num = 1;
     curr_move.fen = '';
-    currentPosition.fen = 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1';
+    currentPosition.fen = fen;
     board.position(currentPosition.fen);
-    setupBoardFen = '';
-
+    if (fen == START_FEN) {
+        setupBoardFen = '';
+    } else {
+        setupBoardFen = fen;
+    }
     writeVariationTree(pgnEl, walk_tree_iterative(gameHistory.variations), gameHistory);
 
     updateStatus();
 }
-
 
 function goToStart() {
     stop_analysis();
     currentPosition = gameHistory;
     board.position(currentPosition.fen);
     updateStatus();
-
 }
 
 function getDGTPGN() {
@@ -1177,10 +1181,12 @@ function getDGTPGN() {
 function getSystemInfo() {
      $.get("/info", { action: "get_system_info"}, function (data) {
         window.system_info = data;
-
-        $("#SystemInfo").text('Picochess '+window.system_info.version + ' ' + window.system_info.ip + ' ');
+        var ip = '?';
+        if (window.system_info.ip) {
+            var ip = window.system_info.ip;
+        }
+        $("#SystemInfo").text('Picochess '+window.system_info.version + ' - IP: ' + ip + ' ');
     });
-
 }
 
 function goToDGTFen() {

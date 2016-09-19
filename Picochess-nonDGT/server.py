@@ -27,8 +27,11 @@ from utilities import *
 import queue
 from web.picoweb import picoweb as pw
 import chess.pgn as pgn
+import chess
 import json
 import datetime
+
+import copy
 
 _workers = ThreadPool(5)
 
@@ -59,14 +62,12 @@ def create_game_header(cls, game):
     if 'game_info' in cls.shared:
         if "play_mode" in cls.shared["game_info"]:
             if "level" in cls.shared["game_info"]:
-                engine_name += " (Level {0})".format(cls.shared["game_info"]["level"])
-            game.headers["Black"] = engine_name if cls.shared["game_info"][
-                                                       "play_mode"] == PlayMode.PLAY_WHITE else user_name
-            game.headers["White"] = engine_name if cls.shared["game_info"][
-                                                       "play_mode"] == PlayMode.PLAY_BLACK else user_name
+                engine_name += " /{0}\\".format(cls.shared["game_info"]["level"])
+            game.headers["Black"] = engine_name if cls.shared["game_info"]["play_mode"] == PlayMode.USER_WHITE else user_name
+            game.headers["White"] = engine_name if cls.shared["game_info"]["play_mode"] == PlayMode.USER_BLACK else user_name
 
-            comp_color = "Black" if cls.shared["game_info"]["play_mode"] == PlayMode.PLAY_WHITE else "White"
-            user_color = "Black" if cls.shared["game_info"]["play_mode"] == PlayMode.PLAY_BLACK else "White"
+            comp_color = "Black" if cls.shared["game_info"]["play_mode"] == PlayMode.USER_WHITE else "White"
+            user_color = "Black" if cls.shared["game_info"]["play_mode"] == PlayMode.USER_BLACK else "White"
             game.headers[comp_color + "Elo"] = "2900"
             game.headers[user_color + "Elo"] = "-"
 
@@ -108,7 +109,7 @@ class ChannelHandler(tornado.web.RequestHandler):
             r = {'type': 'broadcast', 'msg': 'Received position from Spectators!', 'pgn': pgn_str, 'fen': fen}
             EventHandler.write_to_clients(r)
         elif action == 'move':
-            WebServer.fire(Event.REMOTE_MOVE(move=self.get_argument("source") + self.get_argument("target"), fen= self.get_argument("fen")))
+            WebServer.fire(Event.REMOTE_MOVE(move=self.get_argument("source") + self.get_argument("target"), fen=self.get_argument("fen")))
 
 
 class EventHandler(WebSocketHandler):
@@ -190,6 +191,7 @@ class WebServer(Observable, threading.Thread):
         application.listen(port)
 
     def run(self):
+        logging.info('evt_queue ready')
         IOLoop.instance().start()
 
 
@@ -217,12 +219,35 @@ class WebDisplay(DisplayMsg, threading.Thread):
             self.shared['system_info'] = {}
 
     def task(self, message):
+        def transfer(g):
+            msg_game = copy.deepcopy(g)
+            pgn_game = pgn.Game()
+            moves = []
+            # go back, to see if the first fen is not standard fen
+            while msg_game.move_stack:
+                moves.insert(0, msg_game.pop())
+            if msg_game.fen() != chess.STARTING_FEN:
+                pgn_game.setup(msg_game.fen())
+
+            create_game_header(self, pgn_game)
+
+            node = pgn_game
+            for move in moves:
+                node = node.add_variation(move)
+            # transfer game to a pgn string
+            exporter = pgn.StringExporter(headers=True, comments=False, variations=False)
+            return pgn_game.accept(exporter)
+
         for case in switch(message):
             if case(MessageApi.BOOK_MOVE):
                 EventHandler.write_to_clients({'event': 'Message', 'msg': 'Book move'})
                 break
             if case(MessageApi.START_NEW_GAME):
-                EventHandler.write_to_clients({'event': 'NewGame'})
+                fen = message.game.fen()
+                r = {'fen': fen}
+                self.shared['last_dgt_move_msg'] = r
+                EventHandler.write_to_clients(r)
+                EventHandler.write_to_clients({'event': 'NewGame', 'fen': fen})
                 EventHandler.write_to_clients({'event': 'Message', 'msg': 'New game'})
                 update_headers(self)
                 break
@@ -233,6 +258,9 @@ class WebDisplay(DisplayMsg, threading.Thread):
                 self.shared['uci_options'] = message.options
                 break
             if case(MessageApi.SYSTEM_INFO):
+                r = {'fen': 'rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR'}
+                self.shared['last_dgt_move_msg'] = r
+                EventHandler.write_to_clients(r)
                 self.shared['system_info'] = message.info
                 self.shared['system_info']['old_engine'] = self.shared['system_info']['engine_name']
                 update_headers(self)
@@ -254,7 +282,7 @@ class WebDisplay(DisplayMsg, threading.Thread):
                 self.create_game_info()
                 self.shared['game_info']['mode'] = message.mode
                 if self.shared['game_info']['mode'] == Mode.REMOTE:
-                    self.shared['system_info']['engine_name'] = "Remote Player"
+                    self.shared['system_info']['engine_name'] = 'Remote Player'
                 else:
                     self.shared['system_info']['engine_name'] = self.shared['system_info']['old_engine']
                 update_headers(self)
@@ -268,7 +296,7 @@ class WebDisplay(DisplayMsg, threading.Thread):
                 self.shared['game_info']['time_text'] = message.time_text
                 break
             if case(MessageApi.LEVEL):
-                self.shared['game_info']['level'] = message.level
+                self.shared['game_info']['level'] = message.level_text.m
                 update_headers(self)
                 break
             if case(MessageApi.JACK_CONNECTED_ERROR):
@@ -284,73 +312,30 @@ class WebDisplay(DisplayMsg, threading.Thread):
                 EventHandler.write_to_clients({'event': 'Message', 'msg': 'DGT clock connected through ' + message.attached})
                 break
             if case(MessageApi.COMPUTER_MOVE):
-                game = pgn.Game()
-                custom_fen = getattr(message.game, 'custom_fen', None)
-                if custom_fen:
-                    game.setup(custom_fen)
-                create_game_header(self, game)
-
-                tmp = game
-                move_stack = message.game.move_stack
-                for move in move_stack:
-                    tmp = tmp.add_variation(move)
-                exporter = pgn.StringExporter(headers=True, comments=False, variations=False)
-
-                pgn_str = game.accept(exporter)
+                pgn_str = transfer(message.game)
                 fen = message.game.fen()
-                # pgn_str = str(exporter)
-                r = {'pgn': pgn_str, 'fen': fen, 'event': "newFEN"}
-
-                r['move'] = message.result.bestmove.uci()
-                r['msg'] = 'Computer move: ' + str(message.result.bestmove)
+                mov = message.move.uci()
+                msg = 'Computer move: ' + str(message.move)
+                r = {'pgn': pgn_str, 'fen': fen, 'event': 'newFEN', 'move': mov, 'msg': msg, 'remote_play': False}
 
                 self.shared['last_dgt_move_msg'] = r
                 EventHandler.write_to_clients(r)
                 break
             if case(MessageApi.USER_MOVE):
-                game = pgn.Game()
-                custom_fen = getattr(message.game, 'custom_fen', None)
-                if custom_fen:
-                    game.setup(custom_fen)
-                create_game_header(self, game)
-
-                tmp = game
-                move_stack = message.game.move_stack
-                for move in move_stack:
-                    tmp = tmp.add_variation(move)
-                exporter = pgn.StringExporter(headers=True, comments=False, variations=False)
-
-                pgn_str = game.accept(exporter)
+                pgn_str = transfer(message.game)
                 fen = message.game.fen()
-                # pgn_str = str(exporter)
-                r = {'pgn': pgn_str, 'fen': fen, 'event': "newFEN"}
-
-                r['move'] = message.move.uci()
-                r['msg'] = 'User move: ' + str(message.move)
+                msg = 'User move: ' + str(message.move)
+                mov = message.move.uci()
+                r = {'pgn': pgn_str, 'fen': fen, 'event': 'newFEN', 'move': mov, 'msg': msg, 'remote_play': False}
 
                 self.shared['last_dgt_move_msg'] = r
                 EventHandler.write_to_clients(r)
                 break
             if case(MessageApi.REVIEW_MOVE):
-                game = pgn.Game()
-                custom_fen = getattr(message.game, 'custom_fen', None)
-                if custom_fen:
-                    game.setup(custom_fen)
-                create_game_header(self, game)
-
-                tmp = game
-                move_stack = message.game.move_stack
-                for move in move_stack:
-                    tmp = tmp.add_variation(move)
-                exporter = pgn.StringExporter(headers=True, comments=False, variations=False)
-
-                pgn_str = game.accept(exporter)
+                pgn_str = transfer(message.game)
                 fen = message.game.fen()
-                # pgn_str = str(exporter)
-                r = {'pgn': pgn_str, 'fen': fen, 'event': "newFEN"}
-
-                r['move'] = 'User move: ' + str(message.move)
-                r['remote_play'] = True
+                mov = 'User move: ' + str(message.move)
+                r = {'pgn': pgn_str, 'fen': fen, 'event': 'newFEN', 'move': mov, 'remote_play': True}
 
                 self.shared['last_dgt_move_msg'] = r
                 EventHandler.write_to_clients(r)
@@ -363,6 +348,7 @@ class WebDisplay(DisplayMsg, threading.Thread):
         IOLoop.instance().add_callback(callback=lambda: self.task(msg))
 
     def run(self):
+        logging.info('msg_queue ready')
         while True:
             # Check if we have something to display
             message = self.msg_queue.get()
