@@ -116,6 +116,8 @@ class KeyboardInput(Observable, threading.Thread):
                             self.fire(Event.DGT_FEN(fen=keyboard_last_fen))
                         else:
                             print('last move already send to virtual board')
+                    elif cmd.startswith('shutdown'):
+                        self.fire(Event.SHUTDOWN())
                     # end simulation code
                     else:
                         # move => fen => virtual board sends fen

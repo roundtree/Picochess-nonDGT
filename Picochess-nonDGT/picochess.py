@@ -895,6 +895,7 @@ def main():
                     if talker:
                         talker.say_event(event)
                     DisplayMsg.show(Message.GAME_ENDS(result=GameResult.ABORT, play_mode=play_mode, game=game.copy()))
+                    rd.DisplayClose()
                     shutdown(args.dgtpi)
                     break
 

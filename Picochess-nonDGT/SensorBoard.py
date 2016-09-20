@@ -103,6 +103,8 @@ class SensorBoard(Observable, threading.Thread):
                             print("Drop Piece")
                         elif cmd.startswith("tb:"):
                             self.fire(Event.TAKE_BACK())
+                        elif cmd.startswith('shutdown'):
+                            self.fire(Event.SHUTDOWN())
 
 
                         # elif cmd.startswith('t:'):
