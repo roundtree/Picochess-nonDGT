@@ -3,7 +3,7 @@
 
 
 #include <stdlib.h>
-#include <arduino.h>
+#include <Arduino.h>
 
 #define  SR_Sin  2  //4021 #3
 #define  PSCont  3  //4021 #9
@@ -21,8 +21,9 @@ class SwitchMatrix
   bool KeyChanged(void);
   bool GetKeyState(int key);
   int keychanged;
+  int buttonmask;
   bool lifted;
-  int matrix[9][8];     //kb matrix
+  int boardmatrix[8][8];     //kb matrix
 
   private:
   
