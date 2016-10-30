@@ -82,7 +82,7 @@ bool SwitchMatrix::checkmatrix()
 
   digitalWrite(PSCont, HIGH);   //latch paralel data
   digitalWrite(PSCont, LOW);
-  for (column = 0; column < 8; column++)
+  for (column = 7; column >= 0; column--)
   {
     int data = digitalRead(SR_Sin);
     buttonmask = buttonmask | data<<column;

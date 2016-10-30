@@ -63,16 +63,16 @@ void loop()
           ToPython("B:4");
         break;
         case 32:
-          ToPython("B:5");
-          //newgame(White);
-        break;
+          ToPython("newgame:w");
+          break;
         case 64:
-          ToPython("B:6");
-          // newgame(Black);
+          ToPython("lever:r");
+          break;
+        case 128:
+         ToPython("tb:");
          break;
-         case 128:
-         ToPython("B:7");
-         // ToPython("tb:");
+        case 192:
+         ToPython("shutdown");
         break;
       }
     }
@@ -215,8 +215,9 @@ void FlashSquare(int square, int milliseconds)
 {
   ClearLeds();
   LightSquare(square);
-  beep(350);
+ 
   matrix.writeDisplay();
+   beep(350);
   //delay(milliseconds);
   ClearLeds();
 }
