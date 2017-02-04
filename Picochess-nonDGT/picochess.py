@@ -366,6 +366,7 @@ def main():
             mvlist.append(move.to_square)
 
             sb.Light_Square(mvlist=mvlist, on=1)
+            sb.Beep(400)
             computermove=True
             DisplayMsg.show(text)
         else:
@@ -916,9 +917,11 @@ def main():
                 if case(EventApi.Lift_Piece):
                     mvlist = []
                     src_square= int(event.square)
-                    #if computermove:
+                    if computermove:
                     #    from_square= int(event.square)
-                    #    if from_square != game.move_stack[-1].from_square:
+                         toSquare = game.move_stack[-1].to_square
+                         mvlist.append(toSquare)
+                         sb.Light_Square(mvlist,on = True)
                     #        illegal_move=True
                     #         #illegal move
                     #    break

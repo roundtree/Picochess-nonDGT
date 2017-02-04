@@ -32,6 +32,10 @@ class SensorBoard(Observable, threading.Thread):
                     sq = "C" + str(square)
                     self.arduino.write(str.encode(sq))
             self.arduino.flush()
+    def Beep(self,tone):
+        cmd = "B" + str(tone)
+        self.arduino.write(str.encode(cmd))
+        self.arduino.flush()
 
 
     def run(self):
