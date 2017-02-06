@@ -32,6 +32,10 @@ class SensorBoard(Observable, threading.Thread):
                     sq = "C" + str(square)
                     self.arduino.write(str.encode(sq))
             self.arduino.flush()
+    def Beep(self,tone):
+        cmd = "B" + str(tone)
+        self.arduino.write(str.encode(cmd))
+        self.arduino.flush()
 
 
     def run(self):
@@ -90,10 +94,12 @@ class SensorBoard(Observable, threading.Thread):
                             if button not in range(5):
                                 raise ValueError(button)
                             self.fire(Event.DGT_BUTTON(button=button))
-                        # elif cmd.startswith('level:'):
-                        #     level =int(cmd.split(':')[1])
-                        #
-                        #     self.fire(Event.LEVEL(level=level,beep=BeepLevel.BUTTON))
+                        elif cmd.startswith('lever:'):
+                            lever = cmd.split(':')[1]
+                            if lever not in ('l', 'r'):
+                                raise ValueError(lever)
+                            button = 0x40 if lever == 'r' else -0x40
+                            self.fire(Event.DGT_BUTTON(button=button))
                         elif cmd.startswith('l:'):
                             from_square = cmd.split(':')[1]
                             self.fire(Event.LIFT_PIECE(square=from_square))

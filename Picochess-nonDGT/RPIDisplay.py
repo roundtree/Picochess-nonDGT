@@ -41,31 +41,39 @@ pieces[1][0] = pygame.image.load("./img/b.png")
 
 keyboard_last_fen = None
 
-class RpiDisplay(DgtIface, threading.Thread):
+class RpiDisplay(DisplayMsg,threading.Thread):
     Computer_Move = False
 
-    def __init__(self, dgtserial, dgttranslate, enable_revelation_leds):
-        super(RpiDisplay, self).__init__(dgtserial, dgttranslate, enable_revelation_leds)
-        # self.lock = threading.Lock()
+    def __init__(self):
+        super(RpiDisplay,self).__init__()
+        # # self.lock = threading.Lock()
         self.game = chess.Board()
 
         self.rt = None
         self.time_side = ClockSide.NONE
         # setup virtual clock
-        main_version = 2 if dgtserial.is_pi else 0
-        DisplayMsg.show(Message.DGT_CLOCK_VERSION(main_version=main_version, sub_version=0, attached="virtual"))
+        #main_version = 2 if dgtserial.is_pi else 0
+        #DisplayMsg.show(Message.DGT_CLOCK_VERSION(main_version=main_version, sub_version=0, attached="virtual"))
 
         self.screen = pygame.display.set_mode((480, 320))
         pygame.init()
         pygame.display.set_caption('Chess')
-        self.font = pygame.font.Font(None, 48)
+
         self.fg = 0, 0, 0
         self.time_left = (0, 0, 0)
         self.time_right = (0, 0, 0)
         self.color = 255
-        self.level = 'Level 20'
-        self.timetext = "Blitz 5"
-        self.info = 'info'
+        self.level = 'Level'
+        self.timetext = "TimeMode"
+        #self.info = ''
+        self.score = "score"
+        self.ponder = "ponder"
+        self.engine_name = "engine"
+        self.mode ="normal"
+
+        self.version = "version"
+        self.displaybrd()
+
 
     def displaybrd(self):
 
@@ -84,104 +92,167 @@ class RpiDisplay(DgtIface, threading.Thread):
                 else:
                     im = 0
                 screen.blit(pieces[(x + y) % 2][im], (x * 32, (224 - y * 32)))
-        stra = 'Clock: {} - {}'.format(self.time_left, self.time_right)
+        #stra = 'Clock: {} - {}'.format(self.time_left, self.time_right)
+        self.font = pygame.font.Font(None, 40)
         ren = self.font.render('Clock: {} - {}'.format(self.time_left, self.time_right), 0, self.fg)
         a = screen.blit(ren, (0, 256))
-        ren = self.font.render(self.level, 0, self.fg)
+        ren = self.font.render(self.engine_name, 0, self.fg)
         a = screen.blit(ren, (256, 0))
+        ren = self.font.render(self.level, 0, self.fg)
+        a = screen.blit(ren, (256, 40))
         ren = self.font.render(self.timetext, 0, self.fg)
         a = screen.blit(ren, (256, 80))
-        ren = self.font.render(self.info, 0, self.fg)
-        a = screen.blit(ren, (256, 144))
+
+        self.font = pygame.font.Font(None, 24)
+        ren = self.font.render(self.mode, 0, self.fg)
+        a = screen.blit(ren, (256, 200))
+
+        ren = self.font.render(self.version, 0, self.fg)
+        a = screen.blit(ren, (0, 300))
+        ren = self.font.render(self.score, 0, self.fg)
+        a = screen.blit(ren, (200, 300))
+        ren = self.font.render(self.ponder, 0, self.fg)
+        a = screen.blit(ren, (300, 300))
         pygame.display.flip()
         pygame.display.update()
 
-    def runclock(self):
-        if self.time_side == ClockSide.LEFT:
-            h, m, s = self.time_left
-            time_left = 3600 * h + 60 * m + s - 1
-            if time_left <= 0:
-                print('Clock flag: left')
-                self.rt.stop()
-            self.time_left = hours_minutes_seconds(time_left)
-        if self.time_side == ClockSide.RIGHT:
-            h, m, s = self.time_right
-            time_right = 3600 * h + 60 * m + s - 1
-            if time_right <= 0:
-                print('Clock flag: right')
-                self.rt.stop()
-            self.time_right = hours_minutes_seconds(time_right)
-        if self.maxtimer_running:
-            print('Clock maxtime not run out')
-        else:
-            print('Clock time: {} - {}'.format(self.time_left, self.time_right))
-        self.displaybrd()
-        #DisplayMsg.show(Message.DGT_CLOCK_TIME(time_left=self.time_left, time_right=self.time_right))
-
-    def display_move_on_clock(self, move, fen, side, beep=False, left_dots=0, right_dots=0):
-        if self.enable_dgt_3000:
-            bit_board = chess.Board(fen)
-            text = bit_board.san(move)
-        else:
-            text = str(move)
-        if side == ClockSide.RIGHT:
-            text = text.rjust(8 if self.enable_dgt_3000 else 6)
-        logging.debug(text)
-        print('Clock move: {} Beep: {}'.format(text, beep))
-        self.info = text
-        self.displaybrd()
-
-    def display_text_on_clock(self, text, beep=False, left_dots=0, right_dots=0):
-        logging.debug(text)
-        print('Clock text: {} Beep: {}'.format(text, beep))
-        self.info = text
-        self.displaybrd()
-    def display_time_on_clock(self, force=False):
-        if self.clock_running or force:
-            print('Clock showing time again - running state: {}'.format(self.clock_running))
-        else:
-            logging.debug('virtual clock isnt running - no need for endClock')
-
-    def stop_clock(self):
-        if self.rt:
-            print('Clock time stopped at {} - {}'.format(self.time_left, self.time_right))
-            self.rt.stop()
-        else:
-            print('Clock not ready')
-        self.clock_running = False
-
-    def resume_clock(self, side):
-        pass
-
-    def start_clock(self, time_left, time_right, side):
-        self.time_left = hours_minutes_seconds(time_left)
-        self.time_right = hours_minutes_seconds(time_right)
-        self.time_side = side
-
-        print('Clock time started at {} - {} on {}'.format(self.time_left, self.time_right, side))
-        if self.rt:
-            self.rt.stop()
-        if side != ClockSide.NONE:
-            self.rt = RepeatedTimer(1, self.runclock)
-            self.rt.start()
-        self.clock_running = (side != ClockSide.NONE)
-
-    def light_squares_revelation_board(self, squares):
-        pass
-
-    def clear_light_revelation_board(self):
-        pass
 
     def update_display(self,game):
-        self.game=game
-        self.displaybrd()
-    def displaylevel(self,leveltext):
-        self.level=leveltext
-        self.displaybrd()
-    def displaytime(self,time):
-        self.timetext = time
-        self.displaybrd()
+         self.game=game
+         self.displaybrd()
+    # def displaylevel(self,leveltext):
+    #     self.level=leveltext
+    #     self.displaybrd()
+    # def displaytime(self,time):
+    #     self.timetext = time
+    #     self.displaybrd()
     def DisplayClose(self):
         pygame.display.quit()
 
+
+    def run(self):
+        global keyboard_last_fen
+        logging.info('msg_queue RPIDisplay ready')
+        while True:
+            # Check if we have something to display
+            message = self.msg_queue.get()
+            for case in switch(message):
+                # print(message)
+                if case(MessageApi.DISPLAY_TEXT):
+                    self.version =  str(message.text)
+                    #logging.info("msg_queue {}".format(message.text))
+                    self.displaybrd()
+                    break
+                if case(MessageApi.DGT_BUTTON):
+                    button = message.button
+                    break
+                if case(MessageApi.ENGINE_READY):
+
+                    self.engine_name = message.name
+                    self.displaybrd()
+                    break
+                if case(MessageApi.ENGINE_STARTUP):
+                    self.engine_name = message.name
+                    self.displaybrd()
+
+                    break
+                if case(MessageApi.INTERACTION_MODE):
+                    self.mode = str(message.mode)
+                    self.displaybrd()
+
+                    break
+                if case(MessageApi.OPENING_BOOK):
+                    self.info = message.book_name
+
+                    break
+                if case(MessageApi.COMPUTER_MOVE):
+                    self.game=message.game
+                    self.displaybrd()
+                    break
+                if case(MessageApi.USER_TAKE_BACK):
+                    self.game=message.game
+                    self.displaybrd()
+                    break
+                if case(MessageApi.TIME_CONTROL):
+                    self.timetext = message.time_text
+                    self.displaybrd()
+                    break
+                if case(MessageApi.COMPUTER_MOVE_DONE_ON_BOARD):
+                    keyboard_last_fen = None
+                    break
+                if case(MessageApi.USER_MOVE):
+                    self.game = message.game
+                    self.displaybrd()
+                    break
+                if case(MessageApi.START_NEW_GAME):
+                    keyboard_last_fen = None
+                    self.time_left = (0, 0, 0)
+                    self.time_right = (0, 0, 0)
+                    self.game = message.game
+                    self.displaybrd()
+
+                    break
+                if case(MessageApi.NEW_SCORE):
+                    self.score = "Score {}".format(message.score)
+                    self.displaybrd()
+                    break
+                if case(MessageApi.DGT_CLOCK_TIME):
+                    self.time_left = message.time_left
+                    self.time_right =  message.time_right
+                    self.displaybrd()
+                    break
+                if case(MessageApi.NEW_PV):         #Principal variation
+                    self.ponder = "Pondering " + str(message.pv[0])     #pondering  move
+                    self.hint_fen = message.fen
+                    self.hint_turn = message.turn
+                    self.displaybrd()
+                    #self.game =
+
+                        #DisplayDgt.show(Dgt.DISPLAY_MOVE(move=self.hint_move, fen=self.hint_fen, side=side, wait=False,
+                          #                               beep=self.dgttranslate.bl(BeepLevel.NO), maxtime=0))
+                    break
+                if case(MessageApi.STARTUP_INFO):
+                    self.mode_index = message.info['interaction_mode']
+                    self.mode_result = message.info['interaction_mode']
+                    self.book_index = message.info['book_index']
+                    self.all_books = message.info['books']
+                    tc = message.info['time_control']
+
+                    if tc.mode == TimeMode.BLITZ:
+                        self.timetext =  'Blitz {:d}'.format(tc.minutes_per_game)
+                    elif tc.mode == TimeMode.FISCHER:
+                        self.timetext = 'Fisher {:d} {:d}'.format(tc.minutes_per_game,tc.fischer_increment)
+                    elif tc.mode == TimeMode.FIXED:
+                        self.timetext = 'Fixed {:d}'.format(tc.seconds_per_move)
+                    self.displaybrd()
+                    break
+                # if case(MessageApi.DGT_CLOCK_VERSION):  #version of attached DGT clock
+                #     self.info = message.main_version
+                #         # sub_version=message.sub_version, attached=message.attached))
+                #     self.displaybrd()
+                #     break
+                if case(MessageApi.KEYBOARD_MOVE):
+                    fen = message.fen.fen().split(' ')[0]
+                    Observable.fire(Event.DGT_FEN(fen=fen))
+                    self.game = message.fen
+                    keyboard_last_fen = fen
+                    self.displaybrd()
+                    break
+                if case(MessageApi.UCI_OPTION_LIST):
+                    self.level = "Skill Level " + message.options['skill level']
+                    self.displaybrd()
+                    break
+                if case(MessageApi.LEVEL):
+                    self.level = message.level_text.m
+
+                    break
+                # if case(MessageApi.PLAYMOVE):
+                #     if message.fen is not None:
+                #         Observable.fire(Event.DGT_FEN(fen=keyboard_last_fen))
+                #     else:
+                #         print('last move already send to virtual board')
+                #     break
+
+                if case():  # Default
+                    pass
 

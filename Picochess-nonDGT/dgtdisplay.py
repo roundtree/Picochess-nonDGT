@@ -204,12 +204,16 @@ class DgtDisplay(Observable, DisplayMsg, threading.Thread):
     def process_button0(self):
         if self.top_result is None:
             if self.last_move:
-                side = ClockSide.LEFT if (self.last_turn == chess.WHITE) != self.flip_board else ClockSide.RIGHT
-                text = Dgt.DISPLAY_MOVE(move=self.last_move, fen=self.last_fen, side=side, wait=False,
-                                        beep=self.dgttranslate.bl(BeepLevel.BUTTON), maxtime=1)
+                #side = ClockSide.LEFT if (self.last_turn == chess.WHITE) != self.flip_board else ClockSide.RIGHT
+                #text = Dgt.DISPLAY_MOVE(move=self.last_move, fen=self.last_fen, side=side, wait=False,
+                #                        beep=self.dgttranslate.bl(BeepLevel.BUTTON), maxtime=1)
+                move = str(self.last_move)
+                text = "Last Move " + move
+
+                DisplayMsg.show(Message.DISPLAY_TEXT(text=text))
             else:
                 text = self.dgttranslate.text('B10_nomove')
-            DisplayDgt.show(text)
+                DisplayDgt.show(text)
 
             self.exit_display(wait=True)
 
@@ -391,6 +395,7 @@ class DgtDisplay(Observable, DisplayMsg, threading.Thread):
             else:
                 text = self.dgttranslate.text('B10_nomove')
             DisplayDgt.show(text)
+            DisplayMsg.show(Message.DISPLAY_TEXT(text="HINT " + str(text.move)))
             self.exit_display(wait=True)
 
         if self.top_result == Menu.TOP_MENU:

@@ -174,16 +174,16 @@ class TerminalDisplay(DisplayMsg, threading.Thread):
                 #     if message.engine_status == EngineStatus.WAIT:
                 #         print('Computer stops waiting - hmmm')
                 #     break
-                if case(MessageApi.KEYBOARD_MOVE):
-                    Observable.fire(Event.DGT_FEN(fen= message.fen))
-                    keyboard_last_fen = message.fen
-                    break
+                #if case(MessageApi.KEYBOARD_MOVE):
+                    #Observable.fire(Event.DGT_FEN(fen= message.fen.fen))
+                    #keyboard_last_fen = message.fen
+                #    break
                 if case(MessageApi.PLAYMOVE):
                     if message.fen is not None:
                          Observable.fire(Event.DGT_FEN(fen=keyboard_last_fen))
                     else:
                          print('last move already send to virtual board')
-                    break
+                #     break
 
                 if case():  # Default
                     pass

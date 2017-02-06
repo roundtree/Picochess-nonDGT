@@ -366,6 +366,7 @@ def main():
             mvlist.append(move.to_square)
 
             sb.Light_Square(mvlist=mvlist, on=1)
+            sb.Beep(400)
             computermove=True
             DisplayMsg.show(text)
         else:
@@ -533,11 +534,11 @@ def main():
 
         sb = SensorBoard()
         sb.start()
-        rd = RpiDisplay(dgtserial, dgttranslate, args.enable_revelation_leds)
-        rd.start()
+        #rd = RpiDisplay()
+        RpiDisplay().start()
         #KeyboardInput(args.dgtpi).start()
         TerminalDisplay().start()
-        #DgtVr(dgtserial, dgttranslate, args.enable_revelation_leds).start()
+        DgtVr(dgtserial, dgttranslate, args.enable_revelation_leds).start()
     else:
         # Connect to DGT board
         logging.debug('starting picochess in board mode')
@@ -597,17 +598,17 @@ def main():
     system_info_thread.start()
 
     engine.startup(get_engine_level_dict(args.engine_level))
-    rd.displaylevel('Level {} :'.format(engine.options['skill level']))
+    #rd.displaylevel('Level {} :'.format(engine.options['skill level']))
 
     # Startup - external
     time_control, text = transfer_time(args.time.split())
-    rd.displaytime(text.m)
+    #rd.displaytime(text.m)
     text.beep = False
     DisplayMsg.show(Message.STARTUP_INFO(info={'interaction_mode': interaction_mode, 'play_mode': play_mode,
                                                'books': all_books, 'book_index': book_index,
                                                'time_control': time_control,'time_text': text}))
     DisplayMsg.show(Message.UCI_OPTION_LIST(options=engine.options))
-    DisplayMsg.show(Message.ENGINE_STARTUP(shell=engine.get_shell(), file=engine.get_file(),
+    DisplayMsg.show(Message.ENGINE_STARTUP(name = engine.get().name,shell=engine.get_shell(), file=engine.get_file(),
                                            has_levels=engine.has_levels(), has_960=engine.has_chess960()))
 
     # Event loop
@@ -638,7 +639,7 @@ def main():
                         fen = g.fen().split(' ')[0]
                         if event.flip_board:
                           fen = fen[::-1]
-                        DisplayMsg.show(Message.KEYBOARD_MOVE(fen=fen))
+                        DisplayMsg.show(Message.KEYBOARD_MOVE(fen=g))
 
 
 
@@ -648,7 +649,7 @@ def main():
                     if event.options:
                         engine.startup(event.options, False)
                     DisplayMsg.show(Message.LEVEL(level_text=event.level_text))
-                    rd.displaylevel(event.level_text.m)
+                    #rd.displaylevel(event.level_text.m)
                     break
 
                 if case(EventApi.NEW_ENGINE):
@@ -880,10 +881,10 @@ def main():
                     elif time_control.mode == TimeMode.FIXED:
                         config['time'] = '{:d}'.format(time_control.seconds_per_move)
                         timestring = 'Fixed {:d}'.format(time_control.seconds_per_move)
-                    rd.displaytime(timestring)
+                    #rd.displaytime(timestring)
                     config.write()
 
-                    #DisplayMsg.show(Message.TIME_CONTROL(time_text=event.time_text, ok_text=event.ok_text))
+                    DisplayMsg.show(Message.TIME_CONTROL(time_text=timestring, ok_text=event.ok_text))
                     break
 
                 if case(EventApi.OUT_OF_TIME):
@@ -895,7 +896,7 @@ def main():
                     if talker:
                         talker.say_event(event)
                     DisplayMsg.show(Message.GAME_ENDS(result=GameResult.ABORT, play_mode=play_mode, game=game.copy()))
-                    rd.DisplayClose()
+                    #rd.DisplayClose()
                     shutdown(args.dgtpi)
                     break
 
@@ -916,9 +917,11 @@ def main():
                 if case(EventApi.Lift_Piece):
                     mvlist = []
                     src_square= int(event.square)
-                    #if computermove:
+                    if computermove:
                     #    from_square= int(event.square)
-                    #    if from_square != game.move_stack[-1].from_square:
+                         toSquare = game.move_stack[-1].to_square
+                         mvlist.append(toSquare)
+                         sb.Light_Square(mvlist,on = True)
                     #        illegal_move=True
                     #         #illegal move
                     #    break
@@ -935,7 +938,7 @@ def main():
                 if case(EventApi.Drop_Piece):
 
                     sb.Light_Square(mvlist=mvlist, on=False)  # all leds off
-                    rd.update_display(game=game)
+                    #rd.update_display(game=game)
                     if computermove:
                         #if int(event.square) == game.move_stack[-1].to_square and  from_square ==game.move_stack[-1].from_square :
                             #mvlist.append(event.square)
